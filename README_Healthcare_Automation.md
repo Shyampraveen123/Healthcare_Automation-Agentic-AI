@@ -205,26 +205,29 @@ Reports are delivered automatically through email.
 
 ---
 
-# System Architecture
+##System Architecture
 
-Google Fit API
-    ↓
-Data Collection Workflow
-    ↓
-Google Sheets Database
-    ↓
-|              |              |
-↓              ↓              ↓
+```text
+                     Google Fit API
+                            │
+                            ▼
+              Data Collection Workflow
+                            │
+                            ▼
+               Google Sheets Database
+                            │
+      ┌─────────────────────┼─────────────────────┐
+      │                     │                     │
+      ▼                     ▼                     ▼
 
-Alert      AI Assistant    Analytics
-System         Bot          Engine
+ Alert System       AI Assistant Bot      Analytics Engine
 
-↓              ↓              ↓
+      │                     │                     │
+      ▼                     ▼                     ▼
 
-Gmail       Telegram       Reports
-Alerts         Bot       Dashboard
+ Gmail Alerts      Telegram Bot      Dashboard & Reports
+```
 
----
 
 # Workflow Breakdown
 

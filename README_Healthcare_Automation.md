@@ -213,7 +213,6 @@ Data Collection Workflow
     ↓
 Google Sheets Database
     ↓
---------------------------------
 |              |              |
 ↓              ↓              ↓
 

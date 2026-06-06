@@ -577,7 +577,7 @@ It represents a practical application of modern AI technologies, workflow automa
 
 # Author
 
-Shyam Praveen.S
+**Shyam Praveen.S**
 
 Full Stack Developer | AI & Automation Developer
 

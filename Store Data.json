@@ -1,0 +1,328 @@
+{
+  "name": "Store Data",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -176,
+        176
+      ],
+      "id": "fc038836-94fc-4c3b-97bf-1b22abd8ec80",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"aggregateBy\": [\n    {\n      \"dataTypeName\": \"com.google.heart_rate.bpm\"\n    }\n  ],\n  \"bucketByTime\": {\n    \"durationMillis\": 60000\n  },\n  \"startTimeMillis\": {{$now.minus({minutes:120}).toMillis()}},\n  \"endTimeMillis\": {{$now.toMillis()}}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        224,
+        16
+      ],
+      "id": "631b215c-c3f5-4fc0-b3e1-4f292cda7e62",
+      "name": "HTTP Request",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "zqaV8VW8l73YiNEs",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "5789a885-e4a5-4477-8dc6-ea30a0604f86",
+              "name": "TIME",
+              "value": "={{ new Date(Number($json.startTimeMillis)).toLocaleTimeString('en-IN', {\n  hour: 'numeric',\n  minute: '2-digit',\n  hour12: true,\n  timeZone: 'Asia/Kolkata'\n}) }}\n",
+              "type": "string"
+            },
+            {
+              "id": "fc7a94e2-9b44-4c67-bd40-e40e3274bef4",
+              "name": "DATE",
+              "value": "={{ new Date(Number($json.startTimeMillis)).toLocaleDateString('en-IN', {\n  day: 'numeric',\n  month: 'long',\n  year: 'numeric',\n  timeZone: 'Asia/Kolkata'\n}) }}\n",
+              "type": "string"
+            },
+            {
+              "id": "951302c6-48ac-49cd-89c3-688c59b30278",
+              "name": "DESCRIPTION",
+              "value": "Heart Rate BPM",
+              "type": "string"
+            },
+            {
+              "id": "fa8a476f-3014-46b2-a385-5e41b0fa09ab",
+              "name": "VALUE",
+              "value": "={{ $json.dataset[0].point[0].value[0].fpVal }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        816,
+        16
+      ],
+      "id": "31ffae1a-10c5-42bd-983a-ce35cac66030",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "bucket",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        432,
+        16
+      ],
+      "id": "4598a767-2cab-4d92-b4f7-5f0f0bb6140a",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1hCAPdJr4jJvBt-zATn5HHae-35PvDDTlOZXVEpSCZ4I",
+          "mode": "list",
+          "cachedResultName": "Health",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hCAPdJr4jJvBt-zATn5HHae-35PvDDTlOZXVEpSCZ4I/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hCAPdJr4jJvBt-zATn5HHae-35PvDDTlOZXVEpSCZ4I/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "TIME": "={{ $json.TIME }}",
+            "DATE": "={{ $json.DATE }}",
+            "DESCRIPTION": "={{ $json.DESCRIPTION }}",
+            "VALUE": "={{ $json.VALUE }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "TIME",
+              "displayName": "TIME",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "DATE",
+              "displayName": "DATE",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "DESCRIPTION",
+              "displayName": "DESCRIPTION",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "VALUE",
+              "displayName": "VALUE",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1088,
+        16
+      ],
+      "id": "7d269577-8106-43cb-aac0-ac75006b27d5",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "6MbzaMPnvOYw9urc",
+          "name": "Google Sheets account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "40473de1-09a3-4919-beca-42eaf056e781",
+              "leftValue": "={{ $json.dataset?.[0]?.point?.length }}\n",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        624,
+        16
+      ],
+      "id": "547979f7-edb0-4937-952c-dc90cc134bca",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 3
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -224,
+        16
+      ],
+      "id": "73890239-6006-4d5f-a855-6b92c5607884",
+      "name": "Schedule Trigger",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "content": "#Get Data from googleFit API & Store the Data in Google Sheets Automatically For Every 10 minutes",
+        "height": 592,
+        "width": 1392,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1344,
+        -1392
+      ],
+      "typeVersion": 1,
+      "id": "e3682941-ca51-4728-998e-9e2c4044c1f2",
+      "name": "Sticky Note"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "f412dce8-dac8-467d-8cf0-64d7d2187fa2",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "20d0fa16aadd0f862f9fb7cdd8583fb83e04f4332280f9c4d47143a228f0bf8a"
+  },
+  "id": "ge2fVki6dmii4q0S",
+  "tags": []
+}

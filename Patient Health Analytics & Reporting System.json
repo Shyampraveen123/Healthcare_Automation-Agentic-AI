@@ -1,0 +1,262 @@
+{
+  "name": "Patient Health Analytics & Reporting System",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "id": "96c91fbe-75ec-4065-b41b-aeeae9e0cd65",
+      "name": "Daily Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        384,
+        -208
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1hCAPdJr4jJvBt-zATn5HHae-35PvDDTlOZXVEpSCZ4I",
+          "mode": "list",
+          "cachedResultName": "Health",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hCAPdJr4jJvBt-zATn5HHae-35PvDDTlOZXVEpSCZ4I/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hCAPdJr4jJvBt-zATn5HHae-35PvDDTlOZXVEpSCZ4I/edit#gid=0"
+        },
+        "options": {}
+      },
+      "id": "751b8be5-154e-4478-8ae0-4df79129773a",
+      "name": "Read Health Logs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        608,
+        -208
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jYFD8T8436IbXqNP",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ─── Utility helpers ───────────────────────────────────────────────\nfunction parseValue(v) {\n  const n = parseFloat(String(v).replace(/[^0-9.-]/g, ''));\n  return isNaN(n) ? null : n;\n}\n\nfunction parseDate(dateStr, timeStr) {\n  try {\n    const combined = `${dateStr} ${timeStr || '00:00'}`;\n    const d = new Date(combined);\n    return isNaN(d.getTime()) ? new Date(0) : d;\n  } catch { return new Date(0); }\n}\n\n// ─── Raw rows ──────────────────────────────────────────────────────\nconst items = $input.all();\nif (!items || items.length === 0) {\n  throw new Error('No data found in the Google Sheet.');\n}\n\n// ─── Normalise & sort ──────────────────────────────────────────────\nconst rows = items\n  .map(item => ({\n    time:        String(item.json.TIME        || item.json.time        || '').trim(),\n    date:        String(item.json.DATE        || item.json.date        || '').trim(),\n    description: String(item.json.DESCRIPTION || item.json.description || 'Unknown').trim(),\n    rawValue:    String(item.json.VALUE       || item.json.value       || '').trim(),\n    numericValue: parseValue(item.json.VALUE  || item.json.value       || '')\n  }))\n  .filter(r => r.date !== '' && r.description !== '')\n  .map(r => ({ ...r, timestamp: parseDate(r.date, r.time) }))\n  .sort((a, b) => b.timestamp - a.timestamp);          // newest first\n\nif (rows.length === 0) throw new Error('No valid rows after normalisation.');\n\n// ─── Recency window ────────────────────────────────────────────────\nconst RECENT_N   = Math.min(20, rows.length);\nconst recentRows = rows.slice(0, RECENT_N);\n\n// ─── Group by metric ──────────────────────────────────────────────\nconst metricMap = {};\nfor (const r of rows) {\n  const key = r.description.toLowerCase();\n  if (!metricMap[key]) metricMap[key] = { label: r.description, values: [] };\n  if (r.numericValue !== null) metricMap[key].values.push(r.numericValue);\n}\n\n// ─── Known reference ranges ────────────────────────────────────────\nconst RANGES = {\n  'blood pressure':     { min: 90,  max: 120, unit: 'mmHg' },\n  'heart rate':         { min: 60,  max: 100, unit: 'bpm'  },\n  'pulse':              { min: 60,  max: 100, unit: 'bpm'  },\n  'temperature':        { min: 36.1,max: 37.2,unit: '°C'   },\n  'body temperature':   { min: 36.1,max: 37.2,unit: '°C'   },\n  'oxygen saturation':  { min: 95,  max: 100, unit: '%'    },\n  'spo2':               { min: 95,  max: 100, unit: '%'    },\n  'glucose':            { min: 70,  max: 140, unit: 'mg/dL'},\n  'blood glucose':      { min: 70,  max: 140, unit: 'mg/dL'},\n  'weight':             { min: 0,   max: 9999,unit: 'kg'   },\n  'bmi':                { min: 18.5,max: 24.9,unit: ''     },\n  'steps':              { min: 0,   max: 99999,unit: 'steps'},\n  'sleep':              { min: 6,   max: 9,   unit: 'hrs'  },\n  'sleep duration':     { min: 6,   max: 9,   unit: 'hrs'  },\n  'respiratory rate':   { min: 12,  max: 20,  unit: 'brpm' },\n  'systolic':           { min: 90,  max: 120, unit: 'mmHg' },\n  'diastolic':          { min: 60,  max: 80,  unit: 'mmHg' }\n};\n\nfunction getRange(label) {\n  const key = label.toLowerCase();\n  return RANGES[key] || null;\n}\n\nfunction classifyValue(val, range) {\n  if (!range || val === null) return 'normal';\n  if (val < range.min) return 'low';\n  if (val > range.max) return 'high';\n  return 'normal';\n}\n\n// ─── Summary stats per metric ─────────────────────────────────────\nconst metricStats = [];\nfor (const [, m] of Object.entries(metricMap)) {\n  if (m.values.length === 0) continue;\n  const sorted = [...m.values].sort((a, b) => a - b);\n  const avg    = m.values.reduce((s, v) => s + v, 0) / m.values.length;\n  const range  = getRange(m.label);\n  const status = classifyValue(avg, range);\n  metricStats.push({\n    label:   m.label,\n    count:   m.values.length,\n    avg:     Math.round(avg * 10) / 10,\n    min:     sorted[0],\n    max:     sorted[sorted.length - 1],\n    latest:  m.values[0],            // values already newest-first\n    unit:    range?.unit || '',\n    refMin:  range?.min ?? null,\n    refMax:  range?.max ?? null,\n    status\n  });\n}\n\n// ─── Anomaly detection ────────────────────────────────────────────\nconst anomalies = [];\nfor (const r of recentRows) {\n  if (r.numericValue === null) continue;\n  const range  = getRange(r.description);\n  const status = classifyValue(r.numericValue, range);\n  if (status !== 'normal') {\n    anomalies.push({\n      date:        r.date,\n      time:        r.time,\n      description: r.description,\n      value:       r.rawValue,\n      status,\n      refMin:      range?.min,\n      refMax:      range?.max,\n      unit:        range?.unit || ''\n    });\n  }\n}\n\n// ─── Trend analysis ───────────────────────────────────────────────\nconst trends = [];\nfor (const [, m] of Object.entries(metricMap)) {\n  if (m.values.length < 3) continue;\n  const recent3  = m.values.slice(0, 3);\n  const older3   = m.values.slice(-3);\n  const recentAv = recent3.reduce((s,v) => s+v, 0) / recent3.length;\n  const olderAv  = older3.reduce((s,v) => s+v, 0)  / older3.length;\n  const change   = ((recentAv - olderAv) / (Math.abs(olderAv) || 1)) * 100;\n  let direction  = 'stable';\n  if (change > 5)  direction = 'increasing';\n  if (change < -5) direction = 'decreasing';\n  if (direction !== 'stable') {\n    trends.push({\n      label:     m.label,\n      direction,\n      changePct: Math.round(Math.abs(change)),\n      recentAvg: Math.round(recentAv * 10) / 10\n    });\n  }\n}\n\n// ─── Summary for AI prompt ────────────────────────────────────────\nconst summaryText = metricStats\n  .map(s => `${s.label}: latest=${s.latest}${s.unit}, avg=${s.avg}${s.unit}, min=${s.min}, max=${s.max}, status=${s.status}`)\n  .join('\\n');\n\nconst anomalySummary = anomalies.length\n  ? anomalies.map(a => `${a.description} was ${a.status} (${a.value}) on ${a.date}`).join('; ')\n  : 'No anomalies detected.';\n\nconst trendSummary = trends.length\n  ? trends.map(t => `${t.label} is ${t.direction} by ~${t.changePct}%`).join('; ')\n  : 'Metrics appear stable overall.';\n\nconst promptForAI = `You are a professional clinical health analyst.\\n\\nBelow is a summary of a patient's recent health log data.\\n\\nMETRIC SUMMARY:\\n${summaryText}\\n\\nANOMALIES DETECTED:\\n${anomalySummary}\\n\\nTREND ANALYSIS:\\n${trendSummary}\\n\\nProvide a concise, professional health insights report (4–6 bullet points) covering:\\n1. Overall health status\\n2. Any concerning values or patterns\\n3. Positive findings\\n4. Actionable recommendations\\n\\nUse plain English suitable for a patient summary. Do NOT use markdown, headers, or asterisks in your output — return only plain bullet points starting with '•'.`;\n\nreturn [{\n  json: {\n    recentRows,\n    metricStats,\n    anomalies,\n    trends,\n    totalRows:     rows.length,\n    generatedAt:   new Date().toISOString(),\n    promptForAI\n  }\n}];"
+      },
+      "id": "d7f28427-b642-471b-aa0a-eab9e8d2b8ed",
+      "name": "Process & Analyse Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        -208
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.promptForAI }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 600,
+          "temperature": 0.3
+        }
+      },
+      "id": "31a7add9-4ef4-4039-9036-b181dc731e03",
+      "name": "AI Health Insights",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [
+        960,
+        -368
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "L6h4rbrxguvMD7Ka",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const analysis = $('Process & Analyse Data').first().json;\nconst aiText =\n  $('AI Health Insights').first().json.message?.content ||\n  $('AI Health Insights').first().json.choices?.[0]?.message?.content ||\n  \"AI insights unavailable.\";\n\nconst {\n  recentRows = [],\n  metricStats = [],\n  anomalies = [],\n  trends = [],\n  totalRows = 0,\n  generatedAt = new Date().toISOString()\n} = analysis;\n\n// ---------- HELPERS ----------\nconst statusColor = s =>\n  s === 'high' ? '#dc2626' :\n  s === 'low' ? '#f59e0b' :\n  '#16a34a';\n\nconst formatDate = d => new Date(d).toLocaleString();\n\n// ---------- KPI ----------\nconst normalCount = metricStats.filter(m => m.status === 'normal').length;\nconst abnormalCount = anomalies.length;\n\n// ---------- AI ----------\nconst aiHtml = aiText.split('\\n').map(i => `<li>${i}</li>`).join(\"\");\n\n// ---------- METRIC CARDS ----------\nconst cards = metricStats.map(m => `\n<div style=\"flex:1;min-width:220px;background:#ffffff;border-radius:12px;padding:16px;\nbox-shadow:0 2px 6px rgba(0,0,0,0.05);\">\n  <div style=\"font-size:13px;color:#6b7280\">${m.label}</div>\n  <div style=\"font-size:28px;font-weight:bold;color:${statusColor(m.status)}\">\n    ${m.latest || m.avg} ${m.unit || \"\"}\n  </div>\n  <div style=\"font-size:12px;color:#9ca3af\">Avg: ${m.avg}</div>\n  <div style=\"font-size:12px;color:#9ca3af\">Min: ${m.min} | Max: ${m.max}</div>\n</div>\n`).join(\"\");\n\n// ---------- ANOMALIES ----------\nconst anomalyHtml = anomalies.length\n  ? anomalies.map(a => `<tr>\n<td>${a.date} ${a.time}</td>\n<td>${a.description}</td>\n<td style=\"color:red;font-weight:bold\">${a.value}</td>\n</tr>`).join(\"\")\n  : `<tr><td colspan=\"3\" style=\"text-align:center;color:green\">No anomalies</td></tr>`;\n\n// ---------- TRENDS ----------\nconst trendHtml = trends.length\n  ? trends.map(t => `<li>${t.label}: ${t.direction} (${t.changePct}%)</li>`).join(\"\")\n  : \"<li>All metrics stable</li>\";\n\n// ---------- RECENT ----------\nconst recentHtml = recentRows.slice(0,10).map(r => `\n<tr>\n<td>${r.date}</td>\n<td>${r.time}</td>\n<td>${r.description}</td>\n<td>${r.rawValue}</td>\n</tr>\n`).join(\"\");\n\n// ---------- FINAL HTML ----------\nconst html = `\n<!DOCTYPE html>\n<html>\n<body style=\"margin:0;background:#f3f4f6;font-family:Arial\">\n\n<div style=\"max-width:1000px;margin:auto;padding:20px\">\n\n<!-- HEADER -->\n<div style=\"background:#111827;color:white;padding:20px;border-radius:10px\">\n<h1 style=\"margin:0\">Patient Health Dashboard</h1>\n<p style=\"margin:5px 0 0;color:#9ca3af\">${formatDate(generatedAt)}</p>\n</div>\n\n<!-- KPI -->\n<div style=\"display:flex;gap:15px;margin-top:20px\">\n<div style=\"flex:1;background:white;padding:15px;border-radius:10px;text-align:center\">\n<h2>${totalRows}</h2><p>Total Records</p>\n</div>\n<div style=\"flex:1;background:white;padding:15px;border-radius:10px;text-align:center\">\n<h2>${normalCount}</h2><p>Normal</p>\n</div>\n<div style=\"flex:1;background:white;padding:15px;border-radius:10px;text-align:center\">\n<h2>${abnormalCount}</h2><p>Anomalies</p>\n</div>\n</div>\n\n<!-- METRICS -->\n<div style=\"margin-top:20px\">\n<h2>Metrics Overview</h2>\n<div style=\"display:flex;flex-wrap:wrap;gap:15px\">\n${cards}\n</div>\n</div>\n\n<!-- AI -->\n<div style=\"margin-top:20px;background:white;padding:20px;border-radius:10px\">\n<h2>AI Insights</h2>\n<ul>${aiHtml}</ul>\n</div>\n\n<!-- TRENDS -->\n<div style=\"margin-top:20px;background:white;padding:20px;border-radius:10px\">\n<h2>Trend Analysis</h2>\n<ul>${trendHtml}</ul>\n</div>\n\n<!-- ANOMALIES -->\n<div style=\"margin-top:20px;background:white;padding:20px;border-radius:10px\">\n<h2>Anomalies</h2>\n<table width=\"100%\">\n<tr><th>Date</th><th>Metric</th><th>Value</th></tr>\n${anomalyHtml}\n</table>\n</div>\n\n<!-- RECENT -->\n<div style=\"margin-top:20px;background:white;padding:20px;border-radius:10px\">\n<h2>Recent Data</h2>\n<table width=\"100%\">\n<tr><th>Date</th><th>Time</th><th>Metric</th><th>Value</th></tr>\n${recentHtml}\n</table>\n</div>\n\n</div>\n</body>\n</html>\n`;\n\nreturn [{\n  json: {\n    html,\n    subject: \"Professional Health Report\"\n  }\n}];"
+      },
+      "id": "1ed8ad88-99af-439f-a9c6-bf63360dbf7e",
+      "name": "Build HTML Dashboard",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1264,
+        -208
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "shyampraveen005@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "message": "={{$json.html}}",
+        "options": {
+          "senderName": "Health Analytics System"
+        }
+      },
+      "id": "6834638a-e38e-419d-9aa5-84737b18a478",
+      "name": "Send Email Report",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1488,
+        -208
+      ],
+      "webhookId": "1c4f5e0b-d1ee-48d4-a28c-f00313cff888",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "rsrTVDoGKI688EEN",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const subject = $('Build HTML Dashboard').first().json.subject;\nreturn [{\n  json: {\n    status: 'success',\n    message: 'Health analytics report sent successfully.',\n    emailSubject: subject,\n    sentAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "08f2c288-5812-419d-9aff-4af53bf9e1f9",
+      "name": "Log Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1712,
+        -208
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Daily Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Health Logs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Health Logs": {
+      "main": [
+        [
+          {
+            "node": "Process & Analyse Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process & Analyse Data": {
+      "main": [
+        [
+          {
+            "node": "AI Health Insights",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Health Insights": {
+      "main": [
+        [
+          {
+            "node": "Build HTML Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build HTML Dashboard": {
+      "main": [
+        [
+          {
+            "node": "Send Email Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email Report": {
+      "main": [
+        [
+          {
+            "node": "Log Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "28ffd41b-c551-46c6-99ab-e70188e2d7d2",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2de263a96ac5f74d010f1ba1c22fd0ae70642a988dab2bf3be86e75ed4b8876c"
+  },
+  "id": "reh7G0YAiR4zmhH7",
+  "tags": [
+    {
+      "updatedAt": "2026-04-27T15:41:19.535Z",
+      "createdAt": "2026-04-27T15:41:19.535Z",
+      "id": "ECyokBTsOY3FlIzn",
+      "name": "analytics"
+    },
+    {
+      "updatedAt": "2026-04-27T15:41:19.505Z",
+      "createdAt": "2026-04-27T15:41:19.505Z",
+      "id": "M1qFukHorVDSXYCL",
+      "name": "healthcare"
+    },
+    {
+      "updatedAt": "2026-04-27T15:41:19.609Z",
+      "createdAt": "2026-04-27T15:41:19.609Z",
+      "id": "SpeT11Z3CJq2a6Zv",
+      "name": "reporting"
+    },
+    {
+      "updatedAt": "2026-04-27T15:41:19.574Z",
+      "createdAt": "2026-04-27T15:41:19.574Z",
+      "id": "ctcDnktDJwIqAfhk",
+      "name": "automation"
+    }
+  ]
+}

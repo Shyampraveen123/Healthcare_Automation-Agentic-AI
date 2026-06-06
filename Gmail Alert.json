@@ -1,0 +1,213 @@
+{
+  "name": "Gmail Alert",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "cd08be71-15e4-40a1-922e-99292c857ca5",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1hCAPdJr4jJvBt-zATn5HHae-35PvDDTlOZXVEpSCZ4I",
+          "mode": "list",
+          "cachedResultName": "Health",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hCAPdJr4jJvBt-zATn5HHae-35PvDDTlOZXVEpSCZ4I/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hCAPdJr4jJvBt-zATn5HHae-35PvDDTlOZXVEpSCZ4I/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        208,
+        0
+      ],
+      "id": "80056d34-dac2-42b4-b4a3-f07a1e009fc8",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "6MbzaMPnvOYw9urc",
+          "name": "Google Sheets account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Sort using DATE + TIME combined\nitems.sort((a, b) => {\n  const dateTimeA = new Date(a.json.DATE + \" \" + a.json.TIME);\n  const dateTimeB = new Date(b.json.DATE + \" \" + b.json.TIME);\n  return dateTimeB - dateTimeA; // Descending (latest first)\n});\n\n// Return only latest row\nreturn [items[0]];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "58a449dc-5c6b-454c-8adb-1cc93f63ca50",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "07434b33-88c0-4530-bab4-83cdf877b538",
+              "leftValue": "={{$json.VALUE}}",
+              "rightValue": 100,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            },
+            {
+              "id": "6077dc6c-5509-4278-8673-0eae32ba9d53",
+              "leftValue": "={{$json.VALUE}}",
+              "rightValue": 120,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "looseTypeValidation": "={{ false }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        608,
+        64
+      ],
+      "id": "99c8e48d-6cc1-4aa6-ab90-2a41aba43386",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        688,
+        -224
+      ],
+      "id": "b8f50f6b-bed5-425f-a35b-31c5e9eb1ded",
+      "name": "Send a text message",
+      "webhookId": "fca4803c-755b-47f6-9ac6-8e1dd5453db7",
+      "credentials": {
+        "telegramApi": {
+          "id": "xHorxHFjCQ3BMUhN",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "shyampraveen375@gmail.com",
+        "subject": "Alert!",
+        "message": "abnormal heart rate!😥....please check data...",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        864,
+        -32
+      ],
+      "id": "34d83389-4726-4b87-a7f2-3146cefd6635",
+      "name": "Send a message",
+      "webhookId": "b0b1906f-e16e-4760-8a49-e6b7f24062c1",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "N2m8mWNTGSt7Ekne",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        []
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "7ac8a054-f802-4a47-8304-c2e156fba613",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "20d0fa16aadd0f862f9fb7cdd8583fb83e04f4332280f9c4d47143a228f0bf8a"
+  },
+  "id": "P42o9Yjq4VcopC0N",
+  "tags": []
+}

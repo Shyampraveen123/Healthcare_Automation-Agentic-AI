@@ -1,0 +1,222 @@
+{
+  "name": "AI agent",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        416,
+        -32
+      ],
+      "id": "ff2067de-ed5f-4f95-acee-308bdd9ea16e",
+      "name": "Telegram Trigger",
+      "webhookId": "9f0e5b9b-dd62-45bc-9065-52cb6a04e2a3",
+      "credentials": {
+        "telegramApi": {
+          "id": "xHorxHFjCQ3BMUhN",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.message.text }}",
+        "options": {
+          "systemMessage": "=Role\nyou are a helpful AI assistant that acts as an email automation agent.\nTask \nYour task is to draft and send emails on behalf of the user when requested.\nRules\nWhenever you send an email, you must first determine the recipient's email address by using the \"Get Contacts\" tool.\nRetrieving the email address via this tool is mandatory and may not be skipped under any circumstances.\nYou may only proceed with sending an email after the correct email address has been successfully obtained.\nAll outgoing emails must end with the following sign-off exactly as written:\nBest regards,\nsil\n\ncontext\n    The current date and time is {{ $now }}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        640,
+        -32
+      ],
+      "id": "a04d06c9-b371-43ad-9473-e18d5b42f2fd",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        512,
+        176
+      ],
+      "id": "b32209d5-70f3-4228-a48a-1b5b3c41ea70",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "vvxIreZtI3W35Otm",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.output }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        992,
+        -32
+      ],
+      "id": "2236c405-4264-423a-8ea6-18178173c538",
+      "name": "Send a text message",
+      "webhookId": "f5e8cc3b-cc75-432e-8055-3c25f490d5f8",
+      "credentials": {
+        "telegramApi": {
+          "id": "xHorxHFjCQ3BMUhN",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "thandees",
+        "height": 544,
+        "width": 912,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        288,
+        -128
+      ],
+      "typeVersion": 1,
+      "id": "a1cb826e-a61c-4079-81ca-67af94f7db50",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.message.chat.id }}",
+        "contextWindowLength": "=5"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        656,
+        176
+      ],
+      "id": "538aebb5-240f-4b8b-b579-3488133b6666",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1hCAPdJr4jJvBt-zATn5HHae-35PvDDTlOZXVEpSCZ4I",
+          "mode": "list",
+          "cachedResultName": "Health",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hCAPdJr4jJvBt-zATn5HHae-35PvDDTlOZXVEpSCZ4I/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hCAPdJr4jJvBt-zATn5HHae-35PvDDTlOZXVEpSCZ4I/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        800,
+        176
+      ],
+      "id": "a9e89d5c-2323-48dd-abd9-a41d12234309",
+      "name": "Get row(s) in sheet in Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "TgRo0IsdoXzjvQvg",
+          "name": "Google Sheets account 4"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        []
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet in Google Sheets": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "5df7b5a8-491e-4683-923e-f49b947976c2",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "20d0fa16aadd0f862f9fb7cdd8583fb83e04f4332280f9c4d47143a228f0bf8a"
+  },
+  "id": "VsGrATHQodLZTDwO",
+  "tags": []
+}
